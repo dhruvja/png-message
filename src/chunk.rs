@@ -4,30 +4,29 @@ use crc::{Crc, CRC_32_ISCSI};
 use std::fmt::{self, Display};
 use std::str;
 
-struct Chunk {
-    length: u32,
-    chunk_type: ChunkType,
-    data: Vec<u8>,
+#[derive(Clone)]
+pub struct Chunk {
+    pub length: u32,
+    pub chunk_type: ChunkType,
+    pub data: Vec<u8>,
 }
 
 fn as_u32_be(array: &[u8]) -> u32 {
-    ((array[0] as u32) << 24) +
-    ((array[1] as u32) << 16) +
-    ((array[2] as u32) <<  8) +
-    ((array[3] as u32) <<  0)
+    ((array[0] as u32) << 24)
+        + ((array[1] as u32) << 16)
+        + ((array[2] as u32) << 8)
+        + ((array[3] as u32) << 0)
 }
 
-fn get_crc(chunk_type: &[u8;4], data: &[u8]) -> u32 {
+fn get_crc(chunk_type: &[u8; 4], data: &[u8]) -> u32 {
     let data_for_crc = [chunk_type, data].concat();
     let crc_struct = Crc::<u32>::new(&CRC_32_ISCSI);
-    crc_struct.checksum(&data_for_crc) 
+    crc_struct.checksum(&data_for_crc)
 }
 
 impl Chunk {
-    fn new(chunk_type: ChunkType, data: Vec<u8>) -> Chunk {
+    pub fn new(chunk_type: ChunkType, data: Vec<u8>) -> Chunk {
         let length = data.len();
-       
-        // let crc = crc::crc32::checksum_ieee(&bytes)
         Chunk {
             length: length.try_into().unwrap(),
             chunk_type,
@@ -39,7 +38,7 @@ impl Chunk {
         self.length
     }
 
-    fn chunk_type(&self) -> ChunkType {
+    pub fn chunk_type(&self) -> ChunkType {
         self.chunk_type.clone()
     }
 
@@ -51,19 +50,29 @@ impl Chunk {
         get_crc(&self.chunk_type.chunk, &self.data)
     }
 
-    fn data_as_string(&self) -> Result<String> {
+    pub fn data_as_string(&self) -> Result<String> {
         let data_as_string = str::from_utf8(&self.data);
         match data_as_string {
             Ok(t) => Ok(t.to_string()),
             Err(e) => Err(Box::new(e)),
         }
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.length
+            .to_be_bytes()
+            .iter()
+            .chain(self.chunk_type.chunk.iter())
+            .chain(self.data.iter())
+            .chain(self.crc().to_be_bytes().iter())
+            .copied()
+            .collect()
+    }
 }
 
 impl TryFrom<&Vec<u8>> for Chunk {
     type Error = Error;
     fn try_from(chunk: &Vec<u8>) -> Result<Self> {
-
         let chunk_length = chunk.len();
 
         let crc_start_index = chunk_length - 4;
@@ -72,13 +81,18 @@ impl TryFrom<&Vec<u8>> for Chunk {
         let chunk_type = &chunk[4..8];
         let chunk_data = &chunk[8..crc_start_index];
         let crc = &chunk[crc_start_index..];
-        
+
         if as_u32_be(crc) != get_crc(chunk_type.try_into().unwrap(), chunk_data) {
             return Err("Invalid Crc".into());
         }
 
-        Ok(Self {length: as_u32_be(length), chunk_type: ChunkType{chunk: chunk_type.try_into().unwrap()}, data: chunk_data.to_vec()})
-
+        Ok(Self {
+            length: as_u32_be(length),
+            chunk_type: ChunkType {
+                chunk: chunk_type.try_into().unwrap(),
+            },
+            data: chunk_data.to_vec(),
+        })
     }
 }
 
