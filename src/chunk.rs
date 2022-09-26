@@ -11,7 +11,7 @@ pub struct Chunk {
     pub data: Vec<u8>,
 }
 
-fn as_u32_be(array: &[u8]) -> u32 {
+pub fn as_u32_be(array: &[u8]) -> u32 {
     ((array[0] as u32) << 24)
         + ((array[1] as u32) << 16)
         + ((array[2] as u32) << 8)

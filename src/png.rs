@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::chunk::Chunk;
+use crate::chunk::{Chunk, as_u32_be};
 use crate::chunk_type::ChunkType;
 use crate::{Error, Result};
 
@@ -53,15 +53,34 @@ impl TryFrom<&[u8]> for Png {
         if header != Png::STANDARD_HEADER {
             Err("The header is invalid".into())
         } else {
-            let chunk = Chunk::try_from(value[8..].to_vec().as_ref()).unwrap();
-            Ok(Png { chunks: vec![chunk] })
+            let chunk = &value[8..];
+            let chunk_length = chunk.len();
+
+            let crc_start_index = chunk_length - 4;
+
+            let length = &chunk[..4];
+            let chunk_type = &chunk[4..8];
+            let chunk_data = &chunk[8..crc_start_index];
+            let crc = &chunk[crc_start_index..];
+
+            let chunks = Chunk {
+                length: as_u32_be(length),
+            chunk_type: ChunkType {
+                chunk: chunk_type.try_into().unwrap(),
+            },
+            data: chunk_data.to_vec(),
+            };
+
+            Ok(Png {
+                chunks: vec![chunks],
+            })
         }
     }
 }
 
 impl Display for Png {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Png {}", self)
+        write!(f, "Png ")
     }
 }
 
